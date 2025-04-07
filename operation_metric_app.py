@@ -12,7 +12,6 @@ st.set_page_config(layout = 'wide')
 # captions
 SUCCESS_MSG = "Records updated successfully!"
 ERROR_MSG = "Error updating records. Please try again."
-is_serached = False
 
 def get_metric_data():
     query = f"SELECT * FROM STAGING_DEV.OPERATION_METRICS.OPERATION_METRIC_DETAILS"
@@ -55,6 +54,8 @@ def merge_data(dataset, updated_dataset):
                 & (dataset["METRIC_TYPE"] == updated_dataset["METRIC_TYPE"])
                 & (dataset["LOCATION"] == updated_dataset["LOCATION"])
                 & (dataset["TIME_PERIOD_TYPE"] == updated_dataset["TIME_PERIOD_TYPE"])
+                & (dataset["FUTURE_1"] == updated_dataset["FUTURE_1"])
+                & (dataset["FUTURE_2"] == updated_dataset["FUTURE_2"])
                 & (dataset["TIME_PERIOD_VALUE"] == updated_dataset["TIME_PERIOD_VALUE"])
             ),
             clauses=[
@@ -79,25 +80,17 @@ def merge_data(dataset, updated_dataset):
 current_table_data = session.create_dataframe(get_metric_data())
 
 # Execute the query and convert it into a Pandas dataframe
-queried_data = current_table_data.to_pandas()
+open_to_edit_df = current_table_data.to_pandas()
 
 st.subheader("Operations Metric Details")
 search_col, add_row_col, col3 = st.columns([1,1, 3], gap="small", vertical_alignment="bottom")
 
-if add_row_col.button("Add Row", type="primary",  icon=":material/add:"):
-    # Adding a new row
-    column_names = queried_data.columns.tolist()
-    new_row = pd.DataFrame([{col: None for col in column_names}]) 
-    queried_data = pd.concat([new_row, queried_data], ignore_index=True)
-
-    
 with search_col:
     search_text = st.text_input("Search:")
     if search_text:
         # Add your search logic here using queried_data
-        is_serached = True
-        queried_data = queried_data[
-            queried_data.apply(
+        open_to_edit_df = open_to_edit_df[
+            open_to_edit_df.apply(
                 lambda row: any(
                     search_text.lower() in str(value).lower() for value in row.astype(str).values
                 ),
@@ -105,13 +98,19 @@ with search_col:
             )
         ]
     else:
-        is_serached = False
-        queried_data = current_table_data.to_pandas() # Display the full dataframe if no search
+        open_to_edit_df = current_table_data.to_pandas() # Display the full dataframe if no search
 
+if add_row_col.button("Add Row", type="primary",  icon=":material/add:"):
+    # Adding a new row
+    column_names = open_to_edit_df.columns.tolist()
+    new_row = pd.DataFrame([{col: None for col in column_names}]) 
+    open_to_edit_df = pd.concat([new_row, open_to_edit_df], ignore_index=True)
 
-with st.form("Operations Metric Details"):
-    edited_df = st.data_editor(
-        data=queried_data,
+    
+
+with st.form("Operations Metric Defination"):
+    open_to_edit_df = st.data_editor(
+        data=open_to_edit_df,
         column_config=get_column_config(),
         use_container_width=True,
         hide_index=True,
@@ -121,6 +120,6 @@ with st.form("Operations Metric Details"):
 
 
 if submitted:
-    updated_dataset = session.create_dataframe(edited_df)
+    updated_dataset = session.create_dataframe(open_to_edit_df)
     dataset = session.table("STAGING_DEV.OPERATION_METRICS.OPERATION_METRIC_DETAILS")
     merge_data(dataset, updated_dataset)
