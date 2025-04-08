@@ -97,18 +97,21 @@ def merge_data(dataset, updated_dataset):
         st.error(f"{ERROR_MSG}: {e}")
         st.stop()
         
+def add_row_to_df(df_name):
+    column_names = st.session_state[df_name].columns.tolist()
+    new_row = pd.DataFrame([{col: None for col in column_names}]) 
+    st.session_state[df_name]= pd.concat([new_row, st.session_state[df_name]], ignore_index=True)
 
+def add_row_to_both_df():
+    add_row_to_df("open_to_edit_df")
+    add_row_to_df("filtered_df")
 
 st.subheader("Operations Metric Definition")
 search_col, add_row_col, col3 = st.columns([1,1, 3], gap="small", vertical_alignment="bottom")
 
 
-if add_row_col.button("Add Row", type="primary",  icon=":material/add:"):
+st.button("Add Row", type="primary",  icon=":material/add:", on_click=add_row_to_both_df)
     # Adding a new row
-    column_names = st.session_state.open_to_edit_df.columns.tolist()
-    new_row = pd.DataFrame([{col: None for col in column_names}]) 
-    # open_to_edit_df = pd.concat([new_row, open_to_edit_df], ignore_index=True)
-    st.session_state.open_to_edit_df = pd.concat([new_row, st.session_state.open_to_edit_df], ignore_index=True)
 
     
 with search_col:
@@ -142,7 +145,7 @@ if st.session_state.is_filtered:
         column_config=get_column_config(),
         use_container_width=True,
         hide_index=True,
-        key="my_key"
+        # key="my_key"
     )
 else: 
     st.session_state.open_to_edit_df = st.data_editor(
@@ -151,7 +154,7 @@ else:
         use_container_width=True,
         hide_index=True,
         on_change=on_data_change,
-        key="my_keyw"
+        # key="my_keyw"
     )
 # st.write(st.session_state.open_to_edit_df.iloc[0])
 # st.write(st.session_state["my_keyw"])
