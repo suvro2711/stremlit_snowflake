@@ -1,4 +1,5 @@
 # Import python packages
+from typing import Literal
 import streamlit as st
 from snowflake.snowpark.context import get_active_session
 from snowflake.snowpark.functions import when_matched, when_not_matched
@@ -102,17 +103,9 @@ def add_row_to_df(df_name):
     new_row = pd.DataFrame([{col: None for col in column_names}]) 
     st.session_state[df_name]= pd.concat([new_row, st.session_state[df_name]], ignore_index=True)
 
-def add_row_to_both_df():
-    add_row_to_df("open_to_edit_df")
-    add_row_to_df("filtered_df")
 
 st.subheader("Operations Metric Definition")
 search_col, add_row_col, col3 = st.columns([1,1, 3], gap="small", vertical_alignment="bottom")
-
-
-st.button("Add Row", type="primary",  icon=":material/add:", on_click=add_row_to_both_df)
-    # Adding a new row
-
     
 with search_col:
     search_text = st.text_input("Search:")
@@ -129,16 +122,36 @@ with search_col:
                 axis=1,
             )
         ]
-        st.write("Filtered", st.session_state.is_filtered, search_text)
+        # st.write("Filtered", st.session_state.is_filtered, search_text)
         
     else:
         st.session_state.is_filtered = False
-        st.write("Not Filtered", st.session_state.is_filtered, search_text)
+        # st.write("Not Filtered", st.session_state.is_filtered, search_text)
         
 def on_data_change():
     st.write("Data has been updated!")
+
+# def create_data_editor(df_name, key=None):
+#     st.session_state[df_name] = st.data_editor(
+#         data=st.session_state[df_name],
+#         column_config=get_column_config(),
+#         use_container_width=True,
+#         hide_index=True,
+#         on_change=on_data_change,
+#         key=key,
+#     )
     
-# with st.form("Operations Metric Definition"):
+def sync_filtered_edits_with_original_df(change_type:Literal["add", "delete", "update"]):
+    if change_type == "add":
+        st.session_state.open_to_edit_df = pd.concat([st.session_state.open_to_edit_df, st.session_state.filtered_df], ignore_index=True)
+    elif change_type == "update":
+        st.session_state.open_to_edit_df.update(st.session_state.filtered_df)
+    # elif change_type == "delete":
+    #     st.session_state.open_to_edit_df = st.session_state.open_to_edit_df[~st.session_state.open_to_edit_df.isin(st.session_state.filtered_df)].dropna()
+
+with add_row_col:
+        st.button("Add Row", type="primary",  icon=":material/add:", on_click=lambda: add_row_to_df("open_to_edit_df"), disabled=st.session_state.is_filtered)
+
 if st.session_state.is_filtered: 
     st.session_state.edited_filter_df = st.data_editor(
         data= st.session_state.filtered_df,
@@ -156,8 +169,6 @@ else:
         on_change=on_data_change,
         # key="my_keyw"
     )
-# st.write(st.session_state.open_to_edit_df.iloc[0])
-# st.write(st.session_state["my_keyw"])
 st.button("Submit Changes", on_click=on_submit)
 
     
