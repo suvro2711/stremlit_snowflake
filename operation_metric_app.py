@@ -37,7 +37,7 @@ def on_submit():
     # dataset = session.table("STAGING_DEV.OPERATION_METRICS.OPERATION_METRIC_DETAILS").to_pandas()
     updated_dataset = st.session_state.open_to_edit_df
     dataset = current_table_data.to_pandas()
-    merge_data(dataset, updated_dataset)
+    submit_data(dataset, updated_dataset)
     
 def get_column_config():
     return {
@@ -87,43 +87,64 @@ def find_updated_rows(dataset, updated_dataset):
     # Find rows that do not meet the condition
     non_matching_rows = dataset[~condition]
     
-    st.write(non_matching_rows)
+    return non_matching_rows
 
+def update_history(type, rows):
+    # history_df has soll the columns of st.session_state.open_to_edit_df but with additional row called ACTION_TYPE and HISTORY_CREATION_DATE
+    history_df = pd.DataFrame(columns=st.session_state.open_to_edit_df.columns.tolist() + ["ACTION_TYPE", "HISTORY_CREATION_DATE"])
+    if type == "UPDATE":
+        #inserting the row to the history_df with new columns ACTION_TYPE and HISTORY_CREATION_DATE
+        rows["ACTION_TYPE"] = type
+        rows["HISTORY_CREATION_DATE"] = datetime.now()
+        history_df = pd.concat([history_df, rows], ignore_index=True)
+    st.write("History DataFrame", history_df)
 
+def update_history_table(dataset, updated_dataset):
+    check_row_updates = find_updated_rows(dataset, updated_dataset)
+    # inserted_rows = find_inserted_rows(dataset, updated_dataset)
+    # deleted_rows = find_deleted_rows(dataset, updated_dataset)
+    if(len(check_row_updates)):
+        update_history(type="U", rows=check_row_updates)
+    # if(len(inserted_rows)):
+        # update_history(type="INSERT", rows=inserted_rows)
+    # if(len(deleted_rows)):
+        # update_history(type="DELETE", rows=dedleted_rows)
 
     
 # merging the changes to original table
-def merge_data(dataset, updated_dataset):
+def submit_edited_data_to_table(dataset, updated_dataset):
+    st.warning("Attempting to update dataset")
+    dataset.merge(
+        source=updated_dataset,
+        join_expr=(
+            (dataset["METRIC_NAME"] == updated_dataset["METRIC_NAME"])
+            & (dataset["METRIC_TYPE"] == updated_dataset["METRIC_TYPE"])
+            & (dataset["LOCATION"] == updated_dataset["LOCATION"])
+            & (dataset["TIME_PERIOD_TYPE"] == updated_dataset["TIME_PERIOD_TYPE"])
+            & (dataset["FUTURE_1"] == updated_dataset["FUTURE_1"])
+            & (dataset["FUTURE_2"] == updated_dataset["FUTURE_2"])
+            & (dataset["TIME_PERIOD_VALUE"] == updated_dataset["TIME_PERIOD_VALUE"])
+        ),
+        clauses=[
+            when_matched().update({
+                col: updated_dataset[col] for col in updated_dataset.columns
+                if col in dataset.columns
+            }),
+            when_not_matched().insert({
+                col: updated_dataset[col] for col in updated_dataset.columns
+                if col in dataset.columns
+            })
+        ]
+    )
+    st.success(SUCCESS_MSG)
+    time.sleep(.5)
+    st.write(updated_dataset[col] for col in updated_dataset.columns if col in dataset.columns)
+
+def submit_data(dataset, updated_dataset):
     try:
-        # st.warning("Attempting to update dataset")
-        # dataset.merge(
-        #     source=updated_dataset,
-        #     join_expr=(
-        #         (dataset["METRIC_NAME"] == updated_dataset["METRIC_NAME"])
-        #         & (dataset["METRIC_TYPE"] == updated_dataset["METRIC_TYPE"])
-        #         & (dataset["LOCATION"] == updated_dataset["LOCATION"])
-        #         & (dataset["TIME_PERIOD_TYPE"] == updated_dataset["TIME_PERIOD_TYPE"])
-        #         & (dataset["FUTURE_1"] == updated_dataset["FUTURE_1"])
-        #         & (dataset["FUTURE_2"] == updated_dataset["FUTURE_2"])
-        #         & (dataset["TIME_PERIOD_VALUE"] == updated_dataset["TIME_PERIOD_VALUE"])
-        #     ),
-        #     clauses=[
-        #         when_matched().update({
-        #             col: updated_dataset[col] for col in updated_dataset.columns
-        #             if col in dataset.columns
-        #         }),
-        #         when_not_matched().insert({
-        #             col: updated_dataset[col] for col in updated_dataset.columns
-        #             if col in dataset.columns
-        #         })
-        #     ]
-        # )
-        # st.success(SUCCESS_MSG)
-        # time.sleep(.5)
-        # st.write(updated_dataset[col] for col in updated_dataset.columns if col in dataset.columns)
-        compare_datasets(dataset, updated_dataset)
-        # st.experimental_rerun()
-        
+        submit_edited_data_to_table(dataset, updated_dataset)
+        update_history_table(dataset, updated_dataset)
+        st.experimental_rerun()
     except Exception as e:
         st.error(f"{ERROR_MSG}: {e}")
         st.stop()
