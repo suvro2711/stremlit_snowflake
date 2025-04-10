@@ -33,12 +33,12 @@ if 'is_filtered' not in st.session_state:
     st.session_state.is_filtered = False
     
 def on_submit():
-    dataset = session.table("STAGING_DEV.OPERATION_METRICS.OPERATION_METRIC_DETAILS").to_pandas()
-    updated_dataset = session.create_dataframe(st.session_state.open_to_edit_df).to_pandas()
+    dataset = session.table("STAGING_DEV.OPERATION_METRICS.OPERATION_METRIC_DETAILS")
+    updated_dataset = session.create_dataframe(st.session_state.open_to_edit_df)
     updated_dataframe = st.session_state.open_to_edit_df
     current_dataframe = current_table_data.to_pandas()
     # submit_data(current_dataframe, updated_dataframe)
-    submit_data(dataset, updated_dataset)
+    submit_data(current_dataframe, updated_dataframe)
     
 def get_column_config():
     return {
@@ -68,7 +68,7 @@ def get_column_config():
     }
 
 
-def find_updated_rows(dataset, updated_dataset):
+def find_inserted_rows(dataset, updated_dataset):
     # Ensure both DataFrames have the same columns
     common_columns = list(set(dataset.columns) & set(updated_dataset.columns))
     dataset = dataset[common_columns]
@@ -90,22 +90,37 @@ def find_updated_rows(dataset, updated_dataset):
     
     return non_matching_rows
 
+def insert_history_table(rows):
+    # history_table = session.table("STAGING_DEV.OPERATION_METRICS.OPERATION_METRIC_DETAILS_HISTORY")
+    # history_table.insert(rows)
+    session.write_pandas(
+        df= rows,
+        table_name = "OPERATION_METRIC_DETAILS_HISTORY",
+        database = "STAGING_DEV",
+        schema = "OPERATION_METRICS",
+        auto_create_table = False,
+        create_temp_table = False,
+        overwrite = False
+    )
+
 def update_history(type, rows):
     # history_df has soll the columns of st.session_state.open_to_edit_df but with additional row called ACTION_TYPE and HISTORY_CREATION_DATE
-    history_df = pd.DataFrame(columns=st.session_state.open_to_edit_df.columns.tolist() + ["ACTION_TYPE", "HISTORY_CREATION_DATE"])
-    if type == "UPDATE":
+    history_df = pd.DataFrame(columns=st.session_state.open_to_edit_df.columns.tolist() + ["ACTION_FLAG", "HISTORY_CREATION_DATE"])
+    if type == "I":
         #inserting the row to the history_df with new columns ACTION_TYPE and HISTORY_CREATION_DATE
-        rows["ACTION_TYPE"] = type
+        rows["ACTION_FLAG"] = type
         rows["HISTORY_CREATION_DATE"] = datetime.now()
         history_df = pd.concat([history_df, rows], ignore_index=True)
+        insert_history_table(rows)
     st.write("History DataFrame", history_df)
 
 def update_history_table(dataset, updated_dataset):
-    check_row_updates = find_updated_rows(dataset, updated_dataset)
+    check_row_inserted = find_inserted_rows(dataset, updated_dataset)
+    st.write("Updated Rows", check_row_inserted)
     # inserted_rows = find_inserted_rows(dataset, updated_dataset)
     # deleted_rows = find_deleted_rows(dataset, updated_dataset)
-    if(len(check_row_updates)):
-        update_history(type="U", rows=check_row_updates)
+    if(len(check_row_inserted)):
+        update_history(type="I", rows=check_row_inserted)
     # if(len(inserted_rows)):
         # update_history(type="INSERT", rows=inserted_rows)
     # if(len(deleted_rows)):
@@ -143,9 +158,9 @@ def submit_edited_data_to_table(dataset, updated_dataset):
 
 def submit_data(dataset, updated_dataset):
     try:
-        submit_edited_data_to_table(dataset, updated_dataset)
+        # submit_edited_data_to_table(dataset, updated_dataset)
         update_history_table(dataset, updated_dataset)
-        st.experimental_rerun()
+        # st.experimental_rerun()
     except Exception as e:
         st.error(f"{ERROR_MSG}: {e}")
         st.stop()
