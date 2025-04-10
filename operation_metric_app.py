@@ -33,10 +33,11 @@ if 'is_filtered' not in st.session_state:
     st.session_state.is_filtered = False
     
 def on_submit():
-    # updated_dataset = session.create_dataframe(st.session_state.open_to_edit_df).to_pandas()
-    # dataset = session.table("STAGING_DEV.OPERATION_METRICS.OPERATION_METRIC_DETAILS").to_pandas()
-    updated_dataset = st.session_state.open_to_edit_df
-    dataset = current_table_data.to_pandas()
+    dataset = session.table("STAGING_DEV.OPERATION_METRICS.OPERATION_METRIC_DETAILS").to_pandas()
+    updated_dataset = session.create_dataframe(st.session_state.open_to_edit_df).to_pandas()
+    updated_dataframe = st.session_state.open_to_edit_df
+    current_dataframe = current_table_data.to_pandas()
+    # submit_data(current_dataframe, updated_dataframe)
     submit_data(dataset, updated_dataset)
     
 def get_column_config():
