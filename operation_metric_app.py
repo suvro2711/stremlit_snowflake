@@ -68,27 +68,60 @@ def get_column_config():
     }
 
 
-def find_inserted_rows(dataset, updated_dataset):
+# def find_inserted_rows(dataset, updated_dataset):
+#     # Ensure both DataFrames have the same columns
+#     common_columns = list(set(dataset.columns) & set(updated_dataset.columns))
+#     dataset = dataset[common_columns]
+#     updated_dataset = updated_dataset[common_columns]
+    
+#     # Define the condition for matching rows
+#     condition = (
+#         (dataset["METRIC_NAME"] == updated_dataset["METRIC_NAME"]) &
+#         (dataset["METRIC_TYPE"] == updated_dataset["METRIC_TYPE"]) &
+#         (dataset["LOCATION"] == updated_dataset["LOCATION"]) &
+#         (dataset["TIME_PERIOD_TYPE"] == updated_dataset["TIME_PERIOD_TYPE"]) &
+#         (dataset["FUTURE_1"] == updated_dataset["FUTURE_1"]) &
+#         (dataset["FUTURE_2"] == updated_dataset["FUTURE_2"]) &
+#         (dataset["TIME_PERIOD_VALUE"] == updated_dataset["TIME_PERIOD_VALUE"])
+#     )
+    
+#     # Find rows that do not meet the condition
+#     non_matching_rows = dataset[~condition]
+    
+#     return non_matching_rows
+
+
+def find_updated_and_inserted_rows(dataset, updated_dataset):
     # Ensure both DataFrames have the same columns
     common_columns = list(set(dataset.columns) & set(updated_dataset.columns))
     dataset = dataset[common_columns]
     updated_dataset = updated_dataset[common_columns]
     
+    # Merge the DataFrames to find non-matching rows
+    merged_df = updated_dataset.merge(dataset, on=common_columns, how='left', indicator=True)
+    
+    # Identify rows that are only in updated_dataset
+    inserted_rows = merged_df[merged_df['_merge'] == 'left_only'].drop(columns=['_merge'])
+    
+    return inserted_rows
+
+def find_only_updated(dataset, inserted_rows):
     # Define the condition for matching rows
     condition = (
-        (dataset["METRIC_NAME"] == updated_dataset["METRIC_NAME"]) &
-        (dataset["METRIC_TYPE"] == updated_dataset["METRIC_TYPE"]) &
-        (dataset["LOCATION"] == updated_dataset["LOCATION"]) &
-        (dataset["TIME_PERIOD_TYPE"] == updated_dataset["TIME_PERIOD_TYPE"]) &
-        (dataset["FUTURE_1"] == updated_dataset["FUTURE_1"]) &
-        (dataset["FUTURE_2"] == updated_dataset["FUTURE_2"]) &
-        (dataset["TIME_PERIOD_VALUE"] == updated_dataset["TIME_PERIOD_VALUE"])
+        (inserted_rows["METRIC_NAME"].isin(dataset["METRIC_NAME"])) &
+        (inserted_rows["METRIC_TYPE"].isin(dataset["METRIC_TYPE"])) &
+        (inserted_rows["LOCATION"].isin(dataset["LOCATION"])) &
+        (inserted_rows["TIME_PERIOD_TYPE"].isin(dataset["TIME_PERIOD_TYPE"])) &
+        (inserted_rows["FUTURE_1"].isin(dataset["FUTURE_1"])) &
+        (inserted_rows["FUTURE_2"].isin(dataset["FUTURE_2"])) &
+        (inserted_rows["TIME_PERIOD_VALUE"].isin(dataset["TIME_PERIOD_VALUE"]))
     )
     
-    # Find rows that do not meet the condition
-    non_matching_rows = dataset[~condition]
+    # Find rows that meet the condition
+    common_rows = inserted_rows[condition]
     
-    return non_matching_rows
+    return common_rows
+
 
 def insert_history_table(rows):
     # history_table = session.table("STAGING_DEV.OPERATION_METRICS.OPERATION_METRIC_DETAILS_HISTORY")
@@ -115,12 +148,14 @@ def update_history(type, rows):
     st.write("History DataFrame", history_df)
 
 def update_history_table(dataset, updated_dataset):
-    check_row_inserted = find_inserted_rows(dataset, updated_dataset)
-    st.write("Updated Rows", check_row_inserted)
+    updated_and_inserted_rows = find_updated_and_inserted_rows(dataset, updated_dataset)
+    only_inserted_rows = find_common_rows(dataset, updated_and_inserted_rows)
+    st.write("All changed Rows", updated_and_inserted_rows)
+    st.write("Common Rows", only_inserted_rows)
     # inserted_rows = find_inserted_rows(dataset, updated_dataset)
     # deleted_rows = find_deleted_rows(dataset, updated_dataset)
-    if(len(check_row_inserted)):
-        update_history(type="I", rows=check_row_inserted)
+    # if(len(check_row_inserted)):
+    #     update_history(type="I", rows=check_row_inserted)
     # if(len(inserted_rows)):
         # update_history(type="INSERT", rows=inserted_rows)
     # if(len(deleted_rows)):
