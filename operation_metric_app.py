@@ -33,13 +33,16 @@ if 'is_filtered' not in st.session_state:
     st.session_state.is_filtered = False
     
 def on_submit():
-    updated_dataset = session.create_dataframe(st.session_state.open_to_edit_df)
-    dataset = session.table("STAGING_DEV.OPERATION_METRICS.OPERATION_METRIC_DETAILS")
+    # updated_dataset = session.create_dataframe(st.session_state.open_to_edit_df).to_pandas()
+    # dataset = session.table("STAGING_DEV.OPERATION_METRICS.OPERATION_METRIC_DETAILS").to_pandas()
+    updated_dataset = st.session_state.open_to_edit_df
+    dataset = current_table_data.to_pandas()
     merge_data(dataset, updated_dataset)
     
 def get_column_config():
     return {
-         'METRIC_NAME': st.column_config.TextColumn(
+        'DELETE':st.column_config.TextColumn(label="DELETE"),
+        'METRIC_NAME': st.column_config.TextColumn(
             label="METRIC NAME",
             # options=[
             #     "Global Productivity",
@@ -64,34 +67,61 @@ def get_column_config():
     }
 
 
+def find_updated_rows(dataset, updated_dataset):
+    # Ensure both DataFrames have the same columns
+    common_columns = list(set(dataset.columns) & set(updated_dataset.columns))
+    dataset = dataset[common_columns]
+    updated_dataset = updated_dataset[common_columns]
+    
+    # Define the condition for matching rows
+    condition = (
+        (dataset["METRIC_NAME"] == updated_dataset["METRIC_NAME"]) &
+        (dataset["METRIC_TYPE"] == updated_dataset["METRIC_TYPE"]) &
+        (dataset["LOCATION"] == updated_dataset["LOCATION"]) &
+        (dataset["TIME_PERIOD_TYPE"] == updated_dataset["TIME_PERIOD_TYPE"]) &
+        (dataset["FUTURE_1"] == updated_dataset["FUTURE_1"]) &
+        (dataset["FUTURE_2"] == updated_dataset["FUTURE_2"]) &
+        (dataset["TIME_PERIOD_VALUE"] == updated_dataset["TIME_PERIOD_VALUE"])
+    )
+    
+    # Find rows that do not meet the condition
+    non_matching_rows = dataset[~condition]
+    
+    st.write(non_matching_rows)
+
+
+
+    
 # merging the changes to original table
 def merge_data(dataset, updated_dataset):
     try:
-        st.warning("Attempting to update dataset")
-        dataset.merge(
-            source=updated_dataset,
-            join_expr=(
-                (dataset["METRIC_NAME"] == updated_dataset["METRIC_NAME"])
-                & (dataset["METRIC_TYPE"] == updated_dataset["METRIC_TYPE"])
-                & (dataset["LOCATION"] == updated_dataset["LOCATION"])
-                & (dataset["TIME_PERIOD_TYPE"] == updated_dataset["TIME_PERIOD_TYPE"])
-                & (dataset["FUTURE_1"] == updated_dataset["FUTURE_1"])
-                & (dataset["FUTURE_2"] == updated_dataset["FUTURE_2"])
-                & (dataset["TIME_PERIOD_VALUE"] == updated_dataset["TIME_PERIOD_VALUE"])
-            ),
-            clauses=[
-                when_matched().update({
-                    col: updated_dataset[col] for col in updated_dataset.columns
-                    if col in dataset.columns
-                }),
-                when_not_matched().insert({
-                    col: updated_dataset[col] for col in updated_dataset.columns
-                    if col in dataset.columns
-                })
-            ]
-        )
-        st.success(SUCCESS_MSG)
-        time.sleep(.5)
+        # st.warning("Attempting to update dataset")
+        # dataset.merge(
+        #     source=updated_dataset,
+        #     join_expr=(
+        #         (dataset["METRIC_NAME"] == updated_dataset["METRIC_NAME"])
+        #         & (dataset["METRIC_TYPE"] == updated_dataset["METRIC_TYPE"])
+        #         & (dataset["LOCATION"] == updated_dataset["LOCATION"])
+        #         & (dataset["TIME_PERIOD_TYPE"] == updated_dataset["TIME_PERIOD_TYPE"])
+        #         & (dataset["FUTURE_1"] == updated_dataset["FUTURE_1"])
+        #         & (dataset["FUTURE_2"] == updated_dataset["FUTURE_2"])
+        #         & (dataset["TIME_PERIOD_VALUE"] == updated_dataset["TIME_PERIOD_VALUE"])
+        #     ),
+        #     clauses=[
+        #         when_matched().update({
+        #             col: updated_dataset[col] for col in updated_dataset.columns
+        #             if col in dataset.columns
+        #         }),
+        #         when_not_matched().insert({
+        #             col: updated_dataset[col] for col in updated_dataset.columns
+        #             if col in dataset.columns
+        #         })
+        #     ]
+        # )
+        # st.success(SUCCESS_MSG)
+        # time.sleep(.5)
+        # st.write(updated_dataset[col] for col in updated_dataset.columns if col in dataset.columns)
+        compare_datasets(dataset, updated_dataset)
         # st.experimental_rerun()
         
     except Exception as e:
@@ -129,7 +159,7 @@ with search_col:
         # st.write("Not Filtered", st.session_state.is_filtered, search_text)
         
 def on_data_change():
-    st.write("Data has been updated!")
+    st.write("Data has been updated!", st.session_state.filtered_data_change)
 
 # def create_data_editor(df_name, key=None):
 #     st.session_state[df_name] = st.data_editor(
@@ -158,7 +188,8 @@ if st.session_state.is_filtered:
         column_config=get_column_config(),
         use_container_width=True,
         hide_index=True,
-        # key="my_key"
+        # on_change=on_data_change,
+        key="filtered_data_change"
     )
 else: 
     st.session_state.open_to_edit_df = st.data_editor(
@@ -166,10 +197,9 @@ else:
         column_config=get_column_config(),
         use_container_width=True,
         hide_index=True,
-        on_change=on_data_change,
         # key="my_keyw"
     )
-st.button("Submit Changes", on_click=on_submit)
+st.button("Submit Changes", on_click=on_submit, disabled=st.session_state.is_filtered)
 
     
 
