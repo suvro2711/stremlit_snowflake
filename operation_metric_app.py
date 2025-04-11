@@ -26,6 +26,9 @@ current_table_data = session.create_dataframe(get_metric_data())
 if 'open_to_edit_df' not in st.session_state:
     st.session_state.open_to_edit_df = current_table_data.to_pandas()
     
+if 'edited_data' not in st.session_state:
+    st.session_state.edited_data = current_table_data.to_pandas()
+    
 if 'filtered_df' not in st.session_state:
     st.session_state.filtered_df = current_table_data.to_pandas()
 
@@ -136,26 +139,48 @@ def insert_history_table(rows):
         overwrite = False
     )
 
-def update_history(type, rows):
-    # history_df has soll the columns of st.session_state.open_to_edit_df but with additional row called ACTION_TYPE and HISTORY_CREATION_DATE
+# def insert_into_history_table(type, dataset, rows):
+#     # history_df has soll the columns of st.session_state.open_to_edit_df but with additional row called ACTION_TYPE and HISTORY_CREATION_DATE
+#     history_df = pd.DataFrame(columns=st.session_state.open_to_edit_df.columns.tolist() + ["ACTION_FLAG", "HISTORY_CREATION_DATE"])
+#     if type == "INSERT_AND_UPDATE":
+#         #inserting the row to the history_df with new columns ACTION_TYPE and HISTORY_CREATION_DATE
+#         rows["ACTION_FLAG"] = type
+#         rows["HISTORY_CREATION_DATE"] = datetime.now()
+#         only_updated_rows = find_common_rows(dataset, updated_and_inserted_rows)
+#         <write code here to mark the only_updated_rows ACTION_FLAG value as u>
+#         history_df = pd.concat([history_df, rows], ignore_index=True)
+#         insert_history_table(rows)
+#     st.write("History DataFrame", history_df)
+
+
+def insert_into_history_table(type, dataset, rows):
+    # history_df has all the columns of st.session_state.open_to_edit_df but with additional columns ACTION_FLAG and HISTORY_CREATION_DATE
     history_df = pd.DataFrame(columns=st.session_state.open_to_edit_df.columns.tolist() + ["ACTION_FLAG", "HISTORY_CREATION_DATE"])
-    if type == "I":
-        #inserting the row to the history_df with new columns ACTION_TYPE and HISTORY_CREATION_DATE
-        rows["ACTION_FLAG"] = type
+    
+    if type == "INSERT_AND_UPDATE":
+        # Inserting the row to the history_df with new columns ACTION_FLAG and HISTORY_CREATION_DATE
+        rows["ACTION_FLAG"] = "I"
         rows["HISTORY_CREATION_DATE"] = datetime.now()
+        
+        # Assuming updated_and_inserted_rows is defined elsewhere in your code
+        only_updated_rows = find_only_updated(dataset, rows)
+        
+        # Mark the only_updated_rows ACTION_FLAG value as 'u'
+        rows.loc[only_updated_rows.index, "ACTION_FLAG"] = 'U'
+        
+        # Concatenate rows to history_df
         history_df = pd.concat([history_df, rows], ignore_index=True)
-        insert_history_table(rows)
+        
+        # Insert history_df into the history table (assuming insert_history_table is defined elsewhere)
+        insert_history_table(history_df)
+    
     st.write("History DataFrame", history_df)
 
 def update_history_table(dataset, updated_dataset):
     updated_and_inserted_rows = find_updated_and_inserted_rows(dataset, updated_dataset)
-    only_inserted_rows = find_common_rows(dataset, updated_and_inserted_rows)
-    st.write("All changed Rows", updated_and_inserted_rows)
-    st.write("Common Rows", only_inserted_rows)
-    # inserted_rows = find_inserted_rows(dataset, updated_dataset)
-    # deleted_rows = find_deleted_rows(dataset, updated_dataset)
-    # if(len(check_row_inserted)):
-    #     update_history(type="I", rows=check_row_inserted)
+
+    if(len(updated_and_inserted_rows)):
+        insert_into_history_table(type="INSERT_AND_UPDATE", dataset=dataset, rows=updated_and_inserted_rows)
     # if(len(inserted_rows)):
         # update_history(type="INSERT", rows=inserted_rows)
     # if(len(deleted_rows)):
@@ -231,7 +256,7 @@ with search_col:
         # st.write("Not Filtered", st.session_state.is_filtered, search_text)
         
 def on_data_change():
-    st.write("Data has been updated!", st.session_state.filtered_data_change)
+    st.session_state.edited_data = st.session_state.open_to_edit_df
 
 # def create_data_editor(df_name, key=None):
 #     st.session_state[df_name] = st.data_editor(
@@ -254,6 +279,7 @@ def sync_filtered_edits_with_original_df(change_type:Literal["add", "delete", "u
 with add_row_col:
         st.button("Add Row", type="primary",  icon=":material/add:", on_click=lambda: add_row_to_df("open_to_edit_df"), disabled=st.session_state.is_filtered)
 
+# with st.form("Edit Pending Orders"):
 if st.session_state.is_filtered: 
     st.session_state.edited_filter_df = st.data_editor(
         data= st.session_state.filtered_df,
@@ -264,13 +290,15 @@ if st.session_state.is_filtered:
         key="filtered_data_change"
     )
 else: 
-    st.session_state.open_to_edit_df = st.data_editor(
+    edited_df = st.data_editor(
         data= st.session_state.open_to_edit_df,
         column_config=get_column_config(),
         use_container_width=True,
-        hide_index=True,
-        # key="my_keyw"
-    )
+        # hide_index=True,
+        # add_row_col="test"
+        # on_change=on_data_change,
+    
+)
 st.button("Submit Changes", on_click=on_submit, disabled=st.session_state.is_filtered)
 
     
