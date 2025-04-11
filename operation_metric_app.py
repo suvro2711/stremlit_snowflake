@@ -225,7 +225,8 @@ def submit_data(dataset, updated_dataset):
         st.error(f"{ERROR_MSG}: {e}")
         st.stop()
         
-def add_row_to_df(df_name):
+def add_row_to_df(df_name, edited_df):
+    st.session_state[df_name]= edited_df
     column_names = st.session_state[df_name].columns.tolist()
     new_row = pd.DataFrame([{col: None for col in column_names}]) 
     st.session_state[df_name]= pd.concat([new_row, st.session_state[df_name]], ignore_index=True)
@@ -276,8 +277,6 @@ def sync_filtered_edits_with_original_df(change_type:Literal["add", "delete", "u
     # elif change_type == "delete":
     #     st.session_state.open_to_edit_df = st.session_state.open_to_edit_df[~st.session_state.open_to_edit_df.isin(st.session_state.filtered_df)].dropna()
 
-with add_row_col:
-        st.button("Add Row", type="primary",  icon=":material/add:", on_click=lambda: add_row_to_df("open_to_edit_df"), disabled=st.session_state.is_filtered)
 
 # with st.form("Edit Pending Orders"):
 if st.session_state.is_filtered: 
@@ -294,11 +293,14 @@ else:
         data= st.session_state.open_to_edit_df,
         column_config=get_column_config(),
         use_container_width=True,
+        num_rows="dynamic",
         # hide_index=True,
         # add_row_col="test"
         # on_change=on_data_change,
     
 )
+with add_row_col:
+        st.button("Add Row", type="primary",  icon=":material/add:", on_click=lambda: add_row_to_df("open_to_edit_df", edited_df), disabled=st.session_state.is_filtered)
 st.button("Submit Changes", on_click=on_submit, disabled=st.session_state.is_filtered)
 
     
